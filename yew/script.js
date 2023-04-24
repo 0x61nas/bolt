@@ -42,14 +42,18 @@ window.onload = function() {
     const resp = document.querySelector(".resp");
     const reqbody = document.querySelector(".reqbody");
     const respbody = document.querySelector(".respbody");
-      
+    const reqheaders = document.querySelector(".reqheaders");      
       
       const req_size = e.y;
       req.style.height = `${req_size}px`;
 
-      let req_body_size = req.clientHeight - 140;
-      reqbody.style.height = `${req_body_size}px`;
-
+      try {
+        let req_body_size = req.clientHeight - 140;
+        reqbody.style.height = `${req_body_size}px`;
+      } catch(err) {
+        let reqheaders_size = req.clientHeight - 115;
+        reqheaders.style.height = `${reqheaders_size}px`;
+      }
 
       let whole = document.documentElement.scrollHeight;
      
@@ -68,21 +72,29 @@ window.addEventListener("resize", init_resize);
 
 
 function init_resize() {
-  console.log("init called");
+  // console.log("init called");
 
   const sidebar = document.querySelector(".sidebars");
   const resp = document.querySelector(".resp");
-
-    
-  sidebar.style.width = '250px';
-
-  
+  const url_input = document.querySelector(".urlinput");
   const req = document.querySelector(".req");
+  const reqheaders = document.querySelector(".reqheaders");
+  const reqbody = document.querySelector(".reqbody");
+  
+  url_input.focus();
+  
+  sidebar.style.width = '250px';
+  
   req.style.height = '325px';
 
 
-  let req_body_size = req.clientHeight - 140;
-  reqbody.style.height = `${req_body_size}px`;
+  try {
+      let req_body_size = req.clientHeight - 140;
+      reqbody.style.height = `${req_body_size}px`;
+  } catch(err) {
+    let reqheaders_size = req.clientHeight - 115;
+    reqheaders.style.height = `${reqheaders_size}px`;
+  }
 
   let whole = document.documentElement.scrollHeight;
 

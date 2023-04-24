@@ -1,0 +1,21 @@
+[package]
+name = "lib_bolt"
+version = "0.11.8"
+edition = "2021"
+authors = ["Hiro <yirohido@gmail.com>"]
+license = "MIT"
+description = "Build and test APIs"
+homepage = "https://github.com/hiro-codes/bolt"
+repository = "https://github.com/hiro-codes/bolt"
+keywords = ["api", "cli"]
+categories = ["command-line-utilities"]
+
+
+[dependencies]
+actix-web = "4"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+actix-files = "0.6.2"
+webbrowser = "0.8.3"
+dirs = "4.0.0"
+reqwest = { version = "0.11.14", features = ["blocking", "json"] }

@@ -1,6 +1,6 @@
 [package]
 name = "bolt-yew"
-version = "0.9.3"
+version = "0.11.8"
 edition = "2021"
 
 [dependencies]
@@ -16,3 +16,4 @@ stylist = { version="0.12.0", features=["yew_integration"] }
 lazy_static = "1.4.0"
 json = "0.12.4"
 syntect = { version = "5.0.0", default-features = false, features = ["default-fancy"]}
+reqwest = { version = "0.11.14", features = ["blocking", "json"] }

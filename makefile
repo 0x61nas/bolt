@@ -1,25 +1,45 @@
-.PHONY: build run setup all api watch build-yew build-tauri watch-yew watch-tauri web clean-yew clean-tauri clean
+.PHONY: build run setup all api watch build-yew build-tauri watch-yew watch-tauri web clean-yew clean-tauri clean cli build-cli
 
 all: build
 
+# Install required build tools and dependencies
 setup:
 	cargo install tauri-cli
 	cargo install trunk
 	rustup target add wasm32-unknown-unknown
 
+# Install Bolt CLI
+install-cli:
+	cd cli && cargo install --path .
 
-build: build-yew build-tauri
+# Build Bolt Desktop App
+build: build-yew-tauri build-tauri
 	cp -r ./tauri/target/release/bundle ./target
 
-run: build-yew watch-tauri
+# Build Bolt CLI
+build-cli: build-yew-cli
+	cd cli && cargo build --release
 
-watch:
-	make watch-yew &
-	make watch-tauri
+# Run Bolt Desktop App in debug mode
+run: build-yew-tauri watch-tauri
 
-build-yew:
+# Run Bolt CLI in debug mode
+run-cli: build-yew-cli
+	cd cli && BOLT_DEV=1 cargo run
+
+build-yew: build-yew-cli build-yew-tauri
+
+build-yew-tauri:
 	cd yew && trunk build -d ../tauri/dist --filehash false
 	cd yew && cp ./script.js ../tauri/dist
+	mkdir ./tauri/dist/icon/
+	cp -r ./icon/* ./tauri/dist/icon/ 
+	
+build-yew-cli:
+	cd yew && trunk build -d ../tauri/dist --filehash false
+	cd yew && cp ./script.js ../tauri/dist
+	mkdir ./tauri/dist/icon/
+	cp -r ./icon/* ./tauri/dist/icon/
 
 build-tauri:
 	cd tauri && cargo tauri build
@@ -27,11 +47,12 @@ build-tauri:
 watch-tauri:
 	cargo tauri dev
 
-watch-yew:
-	cd yew && trunk watch -d ../tauri/dist
-	
-web: build-yew
-	cd ./tauri/dist && http-server -p 3000
+publish:
+	cd lib_bolt && cargo publish
+	cd cli && cargo publish
+
+# Clean temporary build files
+clean: clean-yew clean-tauri clean-cli clean-lib
 
 clean-yew:
 	cd yew && cargo clean
@@ -39,7 +60,8 @@ clean-yew:
 clean-tauri:
 	cd tauri && cargo clean
 
-clean: clean-yew clean-tauri
+clean-cli:
+	cd cli && cargo clean
 
-api:
-	cd api && cargo run
+clean-lib:
+	cd lib_bolt && cargo clean

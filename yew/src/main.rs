@@ -1,19 +1,21 @@
+use crate::helpers::enums::HttpMethod as Method;
 use crate::utils::*;
-use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
-use tauri_sys::tauri;
 use yew::{html::Scope, Component, Context, Html};
 
+mod helpers;
 mod process;
 mod style;
 mod utils;
 mod view;
 
-// http://localhost:2000/ping
-
 // #[wasm_bindgen(module = "/script.js")]
 // extern "C" {}
+
+// TODO: Copy response body button
+// FIXME: request headers and params do not scroll
+// FIXME: white bars appear occassionally
 
 // Define the possible messages which can be sent to the component
 #[derive(Clone)]
@@ -57,6 +59,8 @@ pub enum Msg {
     Update,
     HelpPressed,
     SwitchPage(Page),
+
+    Nothing,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -71,33 +75,6 @@ pub enum ResponseType {
     JSON,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub enum Method {
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    HEAD,
-    PATCH,
-    OPTIONS,
-    CONNECT,
-}
-
-impl Method {
-    fn to_string(&self) -> String {
-        match self {
-            Method::GET => "get".to_string(),
-            Method::POST => "post".to_string(),
-            Method::PUT => "put".to_string(),
-            Method::DELETE => "delete".to_string(),
-            Method::HEAD => "head".to_string(),
-            Method::PATCH => "patch".to_string(),
-            Method::OPTIONS => "options".to_string(),
-            Method::CONNECT => "connect".to_string(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoltApp {}
 
@@ -110,6 +87,7 @@ struct Response {
     size: u64,
     response_type: ResponseType,
     request_index: usize,
+    failed: bool,
 }
 
 impl Response {
@@ -122,6 +100,7 @@ impl Response {
             size: 0,
             response_type: ResponseType::TEXT,
             request_index: 0,
+            failed: false,
         }
     }
 }
@@ -138,10 +117,11 @@ pub struct Request {
 
     // META
     name: String,
-    request_index: usize,
 
     req_tab: u8,
     resp_tab: u8,
+
+    loading: bool
 }
 
 impl Request {
@@ -157,10 +137,11 @@ impl Request {
 
             // META
             name: "New Request ".to_string(),
-            request_index: 0,
 
             req_tab: 1,
             resp_tab: 1,
+
+            loading: false
         }
     }
 }
@@ -197,11 +178,23 @@ pub struct BoltContext {
     main_col: Collection,
     collections: Vec<Collection>,
     // resized: bool,
+    // update_save: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SaveState {
+    page: Page,
+
+    main_current: usize,
+    col_current: Vec<usize>,
+
+    main_col: Collection,
+    collections: Vec<Collection>,
 }
 
 impl BoltContext {
     fn new() -> Self {
-        let bctx = BoltContext {
+        BoltContext {
             link: None,
 
             main_col: Collection::new(),
@@ -211,9 +204,8 @@ impl BoltContext {
             main_current: 0,
             col_current: vec![0, 0],
             // resized: false,
-        };
-
-        return bctx;
+            // update_save: false,
+        }
     }
 }
 
@@ -253,15 +245,19 @@ impl Component for BoltApp {
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         let mut state = GLOBAL_STATE.lock().unwrap();
 
-        let render: bool = process::update::process(&mut state.bctx, msg);
+        let should_render = process::update::process(&mut state.bctx, msg);
 
-        return render;
+        if should_render {
+            save_state(&mut state.bctx);
+        }
+
+        should_render
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
         let mut state = GLOBAL_STATE.lock().unwrap();
 
-        let page = state.bctx.page.clone();
+        let page = state.bctx.page;
 
         if page == Page::Home {
             view::home::home_view(&mut state.bctx)
@@ -273,29 +269,9 @@ impl Component for BoltApp {
     }
 }
 
-fn send_request(request: Request) {
-    #[derive(Debug, Serialize, Deserialize)]
-    struct Payload {
-        url: String,
-        method: Method,
-        body: String,
-        headers: Vec<Vec<String>>,
-        index: usize,
-    }
-
-    let payload = Payload {
-        url: parse_url(request.url, request.params),
-        method: request.method,
-        body: request.body,
-        headers: request.headers,
-        index: request.request_index,
-    };
-
-    // bolt_log(&format!("{:?}", payload));
-
-    wasm_bindgen_futures::spawn_local(async move {
-        let _resp: String = tauri::invoke("send_request", &payload).await.unwrap();
-    });
+fn send_request(request: &mut Request) {
+    request.loading = true;
+    invoke_send(request);
 }
 
 pub fn receive_response(data: &str) {
@@ -306,7 +282,7 @@ pub fn receive_response(data: &str) {
 
     let mut response: Response = serde_json::from_str(data).unwrap();
 
-    // bolt_log(&format!("{:?}", response));
+    // _bolt_log(&format!("{:?}", response));
 
     if response.response_type == ResponseType::JSON {
         response.body = format_json(&response.body);
@@ -316,9 +292,11 @@ pub fn receive_response(data: &str) {
     if bctx.page == Page::Home {
         let current = response.request_index;
         state.bctx.main_col.requests[current].response = response;
+        state.bctx.main_col.requests[current].loading = false;
     } else {
         let current = &bctx.col_current;
         bctx.collections[current[0]].requests[current[1]].response = response;
+        bctx.collections[current[0]].requests[current[1]].loading = false;
     }
 
     let link = state.bctx.link.as_ref().unwrap();
@@ -327,58 +305,7 @@ pub fn receive_response(data: &str) {
 }
 
 fn main() {
-    wasm_bindgen_futures::spawn_local(async move {
-        let mut events = tauri_sys::event::listen::<String>("receive_response")
-            .await
-            .expect("could not create response listener");
-
-        while let Some(event) = events.next().await {
-            receive_response(&event.payload);
-        }
-    });
+    restore_state();
 
     yew::Renderer::<BoltApp>::new().render();
 }
-
-// pub fn resizable(bctx: &mut BoltContext) {
-//     bctx.resized = true;
-
-//     _bolt_log("did resizable");
-//     let window = web_sys::window().unwrap();
-//     let document = web_sys::Window::document(&window).unwrap();
-
-//     // let resizer = web_sys::Document::get_element_by_id(&doc, "resizer")
-//     //     .unwrap()
-//     //     .dyn_into::<web_sys::HtmlElement>()
-//     //     .unwrap();
-
-//     // let sidebar = web_sys::Document::get_element_by_id(&doc, "sidebars")
-//     //     .unwrap()
-//     //     .dyn_into::<web_sys::HtmlElement>()
-//     //     .unwrap();
-
-//     let resizer = document.query_selector(".resizer").unwrap().unwrap();
-//     let sidebar = document
-//         .query_selector(".sidebars")
-//         .unwrap()
-//         .unwrap()
-//         .dyn_into::<HtmlElement>()
-//         .unwrap();
-
-//     let sec_sidebar = sidebar.clone();
-
-//     let closure = Closure::wrap(Box::new(move |event: MouseEvent| {
-//         let size = format!("{}px", event.client_x());
-//         sidebar.style().set_property("flex-basis", &size).unwrap();
-//     }) as Box<dyn FnMut(MouseEvent)>);
-
-//     resizer
-//         .add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())
-//         .unwrap();
-
-//     closure.forget();
-//     sec_sidebar
-//         .style()
-//         .set_property("flex-basis", "325px")
-//         .unwrap();
-// }

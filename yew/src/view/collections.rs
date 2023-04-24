@@ -4,10 +4,7 @@ use yew::{html, Html};
 
 pub fn collections_view(bctx: &mut BoltContext) -> Html {
     html! {
-        <>
-        // <Global css={bctx.style.clone()} />
-
-        <body>
+       <body>
             {view::navbar::get_navbar(bctx)}
 
             <div class="main">
@@ -29,6 +26,5 @@ pub fn collections_view(bctx: &mut BoltContext) -> Html {
 
             // {view::console::console()}
         </body>
-        </>
     }
 }

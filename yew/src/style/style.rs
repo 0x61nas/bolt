@@ -1,7 +1,7 @@
 use stylist::css;
 
 pub fn _get_styles() -> stylist::StyleSource {
-    return css!(
+    css!(
         r#"
 * {
 	margin: 0;
@@ -394,5 +394,5 @@ td {
 
 
 "#
-    );
+    )
 }
